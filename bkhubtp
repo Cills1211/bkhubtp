@@ -14,7 +14,7 @@ local SharedState = {
     AdminProxBtn = nil,
     BalloonedPlayers = {},
     MobileScaleObjects = {},
-    RefreshMobileScale = nil,
+    RefreshMobileScale = nil
 }
 
 do
