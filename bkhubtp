@@ -157,9 +157,7 @@ local DefaultConfig = {
         MobileBtn_IV = {X = 0.5, Y = 0.4},
         MobileBtn_UI = {X = 0.5, Y = 0.4},
         JobJoiner = {X = 0.5, Y = 0.85},
-        DesyncEnabled = true,
-        UnwalkEnabled = false,
-        LaunchVelocity = 67676,
+        
     }, 
     TpSettings = {
         Tool           = "Flying Carpet",
@@ -8031,79 +8029,84 @@ task.spawn(function()
     end)
 end)
 
---// ==========================================================
---// INTEGRATED DESYNC & UNWALK MODULE
---// ==========================================================
+--// Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local LocalPlayer = Players.LocalPlayer
 
-local SETTINGS_INTERNAL = {
+--// Settings
+local SETTINGS = {
     PacketId = 0x1B,
     BufferOffset = 1,
     Value = 0xFFFFFFFF,
     GhostColor = Color3.fromRGB(255, 0, 0),
     GhostTransparency = 0.5,
+    LabelColor = Color3.fromRGB(255, 255, 255),
+    DesyncEnabled = true,
+    UnwalkEnabled = false,
+    LaunchVelocity = 67676 
 }
 
---// 1. Initial Velocity Boost (Auto-Run)
-task.spawn(function()
+--// 1. Auto Velocity Reset
+local function autoReset()
+    task.wait(0.5)
     local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local hrp = char:WaitForChild("HumanoidRootPart", 5)
     local hum = char:WaitForChild("Humanoid", 5)
     
     if hrp and hum then
         hum:ChangeState(Enum.HumanoidStateType.Physics)
-        task.wait(0.1) 
-        hrp.AssemblyLinearVelocity = Vector3.new(0, Config.LaunchVelocity or 67676, 0)
+        task.wait() 
+        hrp.AssemblyLinearVelocity = Vector3.new(0, SETTINGS.LaunchVelocity, 0)
     end
-end)
+end
 
---// 2. Control UI (Styled to match Nova Hub)
-local ScreenGui = Instance.new("ScreenGui", PlayerGui)
-ScreenGui.Name = "Nova_DesyncUI"
+task.spawn(autoReset)
+
+--// 2. Control UI Setup
+local ScreenGui = Instance.new("ScreenGui", CoreGui)
+ScreenGui.Name = "DesyncControlUI"
 
 local MainFrame = Instance.new("Frame", ScreenGui)
-MainFrame.Size = UDim2.new(0, 160, 0, 110)
-MainFrame.Position = UDim2.new(0.5, -80, 0.8, 0)
-MainFrame.BackgroundColor3 = Theme.Background
-MainFrame.BorderSizePixel = 0
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
-
--- Use the existing Nova drag function
-if MakeDraggable then MakeDraggable(MainFrame, MainFrame) end
+MainFrame.Size = UDim2.new(0, 150, 0, 110)
+MainFrame.Position = UDim2.new(0.5, -75, 0.7, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+MainFrame.Active = true
+MainFrame.Draggable = true 
 
 local UnwalkBtn = Instance.new("TextButton", MainFrame)
 UnwalkBtn.Size = UDim2.new(1, -10, 0, 45)
 UnwalkBtn.Position = UDim2.new(0, 5, 0, 5)
 UnwalkBtn.Text = "Unwalk: OFF"
-UnwalkBtn.BackgroundColor3 = Theme.SurfaceHighlight
-UnwalkBtn.TextColor3 = Theme.TextPrimary
-UnwalkBtn.Font = Enum.Font.GothamBold
-UnwalkBtn.TextSize = 14
-Instance.new("UICorner", UnwalkBtn).CornerRadius = UDim.new(0, 6)
+UnwalkBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+UnwalkBtn.TextColor3 = Color3.new(1, 1, 1)
+UnwalkBtn.Font = Enum.Font.SourceSansBold
+UnwalkBtn.TextSize = 16
 
 local ToggleBtn = Instance.new("TextButton", MainFrame)
 ToggleBtn.Size = UDim2.new(1, -10, 0, 45)
 ToggleBtn.Position = UDim2.new(0, 5, 0, 55)
 ToggleBtn.Text = "Desync: ON"
-ToggleBtn.BackgroundColor3 = Theme.Success
-ToggleBtn.TextColor3 = Theme.TextPrimary
-ToggleBtn.Font = Enum.Font.GothamBold
-ToggleBtn.TextSize = 14
-Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 6)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+ToggleBtn.TextColor3 = Color3.new(1, 1, 1)
+ToggleBtn.Font = Enum.Font.SourceSansBold
+ToggleBtn.TextSize = 16
 
---// 3. RakNet Network Hook
+--// 3. RakNet Hook
 if raknet and raknet.add_send_hook then
     raknet.add_send_hook(function(packet)
-        if Config.DesyncEnabled and packet.PacketId == SETTINGS_INTERNAL.PacketId then
+        if SETTINGS.DesyncEnabled and packet.PacketId == SETTINGS.PacketId then
             local data = packet.AsBuffer
-            buffer.writeu32(data, SETTINGS_INTERNAL.BufferOffset, SETTINGS_INTERNAL.Value)
+            buffer.writeu32(data, SETTINGS.BufferOffset, SETTINGS.Value)
             packet:SetData(data)
         end
     end)
 end
 
---// 4. Ghost Visuals Logic
-local ghostFolder = Instance.new("Folder", Workspace)
-ghostFolder.Name = "Nova_Desync_Visuals"
+--// 4. Ghost Visuals
+local ghostFolder = Instance.new("Folder", workspace)
+ghostFolder.Name = "ServerDesync_Visuals"
 local serverGhost, distanceLabel, lockedServerPos
 
 local function createDistanceUI(parent)
@@ -8114,9 +8117,10 @@ local function createDistanceUI(parent)
     local label = Instance.new("TextLabel", bill)
     label.Size = UDim2.new(1, 0, 1, 0)
     label.BackgroundTransparency = 1
-    label.TextColor3 = Theme.TextPrimary
-    label.TextSize = 16
+    label.TextColor3 = SETTINGS.LabelColor
+    label.TextSize = 18
     label.Font = Enum.Font.Code
+    label.Text = "SERVER POS"
     return label
 end
 
@@ -8127,8 +8131,8 @@ local function generateGhost(char)
     char.Archivable = false
     for _, obj in pairs(ghost:GetDescendants()) do
         if obj:IsA("BasePart") then
-            obj.Color = SETTINGS_INTERNAL.GhostColor
-            obj.Transparency = SETTINGS_INTERNAL.GhostTransparency
+            obj.Color = SETTINGS.GhostColor
+            obj.Transparency = SETTINGS.GhostTransparency
             obj.CanCollide, obj.Anchored = false, true
             obj.Material = Enum.Material.ForceField
         elseif obj:IsA("Decal") or obj:IsA("Texture") then obj:Destroy()
@@ -8143,33 +8147,39 @@ local function generateGhost(char)
     return ghost
 end
 
---// 5. Button Logic
+--// 5. Toggle Button Logic
 UnwalkBtn.MouseButton1Click:Connect(function()
-    Config.UnwalkEnabled = not Config.UnwalkEnabled
-    UnwalkBtn.Text = Config.UnwalkEnabled and "Unwalk: ON" or "Unwalk: OFF"
-    UnwalkBtn.BackgroundColor3 = Config.UnwalkEnabled and Theme.Accent1 or Theme.SurfaceHighlight
+    SETTINGS.UnwalkEnabled = not SETTINGS.UnwalkEnabled
+    UnwalkBtn.Text = SETTINGS.UnwalkEnabled and "Unwalk: ON" or "Unwalk: OFF"
+    UnwalkBtn.BackgroundColor3 = SETTINGS.UnwalkEnabled and Color3.fromRGB(0, 100, 200) or Color3.fromRGB(40, 40, 40)
     
     local char = LocalPlayer.Character
     if char then
         local animateScript = char:FindFirstChild("Animate")
         local hum = char:FindFirstChildWhichIsA("Humanoid")
-        if Config.UnwalkEnabled then
+        
+        if SETTINGS.UnwalkEnabled then
             if animateScript then animateScript.Disabled = true end
             if hum then
-                for _, track in pairs(hum:GetPlayingAnimationTracks()) do track:Stop(0) end
+                local animator = hum:FindFirstChildWhichIsA("Animator")
+                local tracks = animator and animator:GetPlayingAnimationTracks() or hum:GetPlayingAnimationTracks()
+                for _, track in pairs(tracks) do track:Stop(0) end
             end
         else
-            if animateScript then animateScript.Disabled = false end
+            if animateScript then 
+                animateScript.Disabled = false 
+                if hum then hum:ChangeState(Enum.HumanoidStateType.Running) end
+            end
         end
     end
 end)
 
 ToggleBtn.MouseButton1Click:Connect(function()
-    Config.DesyncEnabled = not Config.DesyncEnabled
-    ToggleBtn.Text = Config.DesyncEnabled and "Desync: ON" or "Desync: OFF"
-    ToggleBtn.BackgroundColor3 = Config.DesyncEnabled and Theme.Success or Theme.Error
+    SETTINGS.DesyncEnabled = not SETTINGS.DesyncEnabled
+    ToggleBtn.Text = SETTINGS.DesyncEnabled and "Desync: ON" or "Desync: OFF"
+    ToggleBtn.BackgroundColor3 = SETTINGS.DesyncEnabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
     
-    if not Config.DesyncEnabled then
+    if not SETTINGS.DesyncEnabled then
         ghostFolder:ClearAllChildren()
         serverGhost = nil
     else
@@ -8177,12 +8187,12 @@ ToggleBtn.MouseButton1Click:Connect(function()
     end
 end)
 
---// 6. Execution Loop
+--// 6. Main Loop
 RunService.PostSimulation:Connect(function()
     local char = LocalPlayer.Character
     if char and char:FindFirstChild("HumanoidRootPart") then
         local root = char.HumanoidRootPart
-        if Config.DesyncEnabled then
+        if SETTINGS.DesyncEnabled then
             if not serverGhost or not serverGhost.Parent then 
                 serverGhost = generateGhost(char) 
             end
@@ -8202,5 +8212,9 @@ end)
 
 LocalPlayer.CharacterAdded:Connect(function(c) 
     task.wait(1) 
-    if Config.DesyncEnabled then serverGhost = generateGhost(c) end 
+    if SETTINGS.DesyncEnabled then serverGhost = generateGhost(c) end 
+    if SETTINGS.UnwalkEnabled then
+        local anim = c:WaitForChild("Animate", 5)
+        if anim then anim.Disabled = true end
+    end
 end)
