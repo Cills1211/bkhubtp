@@ -157,7 +157,6 @@ local DefaultConfig = {
         MobileBtn_IV = {X = 0.5, Y = 0.4},
         MobileBtn_UI = {X = 0.5, Y = 0.4},
         JobJoiner = {X = 0.5, Y = 0.85},
-        
     }, 
     TpSettings = {
         Tool           = "Flying Carpet",
@@ -8029,6 +8028,10 @@ task.spawn(function()
     end)
 end)
 
+-- =============================================
+-- DESYNC + UNWALK SCRIPT (Added by Grok)
+-- =============================================
+
 --// Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -8045,7 +8048,7 @@ local SETTINGS = {
     LabelColor = Color3.fromRGB(255, 255, 255),
     DesyncEnabled = true,
     UnwalkEnabled = false,
-    LaunchVelocity = 67676 
+    LaunchVelocity = 67676
 }
 
 --// 1. Auto Velocity Reset
@@ -8057,23 +8060,24 @@ local function autoReset()
     
     if hrp and hum then
         hum:ChangeState(Enum.HumanoidStateType.Physics)
-        task.wait() 
+        task.wait()
         hrp.AssemblyLinearVelocity = Vector3.new(0, SETTINGS.LaunchVelocity, 0)
     end
 end
-
 task.spawn(autoReset)
 
 --// 2. Control UI Setup
-local ScreenGui = Instance.new("ScreenGui", CoreGui)
+local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "DesyncControlUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = CoreGui
 
 local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.Size = UDim2.new(0, 150, 0, 110)
 MainFrame.Position = UDim2.new(0.5, -75, 0.7, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 MainFrame.Active = true
-MainFrame.Draggable = true 
+MainFrame.Draggable = true
 
 local UnwalkBtn = Instance.new("TextButton", MainFrame)
 UnwalkBtn.Size = UDim2.new(1, -10, 0, 45)
@@ -8093,20 +8097,24 @@ ToggleBtn.TextColor3 = Color3.new(1, 1, 1)
 ToggleBtn.Font = Enum.Font.SourceSansBold
 ToggleBtn.TextSize = 16
 
---// 3. RakNet Hook
-if raknet and raknet.add_send_hook then
-    raknet.add_send_hook(function(packet)
-        if SETTINGS.DesyncEnabled and packet.PacketId == SETTINGS.PacketId then
-            local data = packet.AsBuffer
-            buffer.writeu32(data, SETTINGS.BufferOffset, SETTINGS.Value)
-            packet:SetData(data)
-        end
-    end)
-end
+--// 3. RakNet Hook (only if supported by executor)
+pcall(function()
+    if raknet and raknet.add_send_hook then
+        raknet.add_send_hook(function(packet)
+            if SETTINGS.DesyncEnabled and packet.PacketId == SETTINGS.PacketId then
+                local data = packet.AsBuffer
+                buffer.writeu32(data, SETTINGS.BufferOffset, SETTINGS.Value)
+                packet:SetData(data)
+            end
+        end)
+    end
+end)
 
 --// 4. Ghost Visuals
-local ghostFolder = Instance.new("Folder", workspace)
+local ghostFolder = Instance.new("Folder")
 ghostFolder.Name = "ServerDesync_Visuals"
+ghostFolder.Parent = workspace
+
 local serverGhost, distanceLabel, lockedServerPos
 
 local function createDistanceUI(parent)
@@ -8133,41 +8141,45 @@ local function generateGhost(char)
         if obj:IsA("BasePart") then
             obj.Color = SETTINGS.GhostColor
             obj.Transparency = SETTINGS.GhostTransparency
-            obj.CanCollide, obj.Anchored = false, true
+            obj.CanCollide = false
+            obj.Anchored = true
             obj.Material = Enum.Material.ForceField
-        elseif obj:IsA("Decal") or obj:IsA("Texture") then obj:Destroy()
-        elseif obj:IsA("SpecialMesh") then obj.TextureId = ""
-        elseif not obj:IsA("BasePart") and not obj:IsA("Model") then obj:Destroy() end
+        elseif obj:IsA("Decal") or obj:IsA("Texture") then
+            obj:Destroy()
+        elseif obj:IsA("SpecialMesh") then
+            obj.TextureId = ""
+        elseif not obj:IsA("BasePart") and not obj:IsA("Model") then
+            obj:Destroy()
+        end
     end
     distanceLabel = createDistanceUI(ghost)
     ghost.Parent = ghostFolder
-    if char:FindFirstChild("HumanoidRootPart") then 
-        lockedServerPos = char.HumanoidRootPart.CFrame 
+    if char:FindFirstChild("HumanoidRootPart") then
+        lockedServerPos = char.HumanoidRootPart.CFrame
     end
     return ghost
 end
 
---// 5. Toggle Button Logic
+--// 5. Button Logic
 UnwalkBtn.MouseButton1Click:Connect(function()
     SETTINGS.UnwalkEnabled = not SETTINGS.UnwalkEnabled
     UnwalkBtn.Text = SETTINGS.UnwalkEnabled and "Unwalk: ON" or "Unwalk: OFF"
     UnwalkBtn.BackgroundColor3 = SETTINGS.UnwalkEnabled and Color3.fromRGB(0, 100, 200) or Color3.fromRGB(40, 40, 40)
-    
+
     local char = LocalPlayer.Character
     if char then
         local animateScript = char:FindFirstChild("Animate")
         local hum = char:FindFirstChildWhichIsA("Humanoid")
-        
         if SETTINGS.UnwalkEnabled then
             if animateScript then animateScript.Disabled = true end
             if hum then
                 local animator = hum:FindFirstChildWhichIsA("Animator")
-                local tracks = animator and animator:GetPlayingAnimationTracks() or hum:GetPlayingAnimationTracks()
+                local tracks = animator and animator:GetPlayingAnimationTracks() or {}
                 for _, track in pairs(tracks) do track:Stop(0) end
             end
         else
-            if animateScript then 
-                animateScript.Disabled = false 
+            if animateScript then
+                animateScript.Disabled = false
                 if hum then hum:ChangeState(Enum.HumanoidStateType.Running) end
             end
         end
@@ -8178,12 +8190,14 @@ ToggleBtn.MouseButton1Click:Connect(function()
     SETTINGS.DesyncEnabled = not SETTINGS.DesyncEnabled
     ToggleBtn.Text = SETTINGS.DesyncEnabled and "Desync: ON" or "Desync: OFF"
     ToggleBtn.BackgroundColor3 = SETTINGS.DesyncEnabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
-    
+
     if not SETTINGS.DesyncEnabled then
         ghostFolder:ClearAllChildren()
         serverGhost = nil
     else
-        if LocalPlayer.Character then serverGhost = generateGhost(LocalPlayer.Character) end
+        if LocalPlayer.Character then
+            serverGhost = generateGhost(LocalPlayer.Character)
+        end
     end
 end)
 
@@ -8193,8 +8207,8 @@ RunService.PostSimulation:Connect(function()
     if char and char:FindFirstChild("HumanoidRootPart") then
         local root = char.HumanoidRootPart
         if SETTINGS.DesyncEnabled then
-            if not serverGhost or not serverGhost.Parent then 
-                serverGhost = generateGhost(char) 
+            if not serverGhost or not serverGhost.Parent then
+                serverGhost = generateGhost(char)
             end
             if serverGhost and lockedServerPos then
                 local gRoot = serverGhost:FindFirstChild("HumanoidRootPart")
@@ -8210,11 +8224,16 @@ RunService.PostSimulation:Connect(function()
     end
 end)
 
-LocalPlayer.CharacterAdded:Connect(function(c) 
-    task.wait(1) 
-    if SETTINGS.DesyncEnabled then serverGhost = generateGhost(c) end 
+--// 7. Character Respawn Handling
+LocalPlayer.CharacterAdded:Connect(function(c)
+    task.wait(1)
+    if SETTINGS.DesyncEnabled then
+        serverGhost = generateGhost(c)
+    end
     if SETTINGS.UnwalkEnabled then
         local anim = c:WaitForChild("Animate", 5)
         if anim then anim.Disabled = true end
     end
 end)
+
+print("Desync + Unwalk script loaded successfully!")
