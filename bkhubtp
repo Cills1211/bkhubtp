@@ -8029,7 +8029,7 @@ task.spawn(function()
 end)
 
 -- =============================================
--- DESYNC + UNWALK SCRIPT (Added by Grok)
+-- FIXED DESYNC + UNWALK SCRIPT
 -- =============================================
 
 --// Services
@@ -8073,33 +8073,34 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = CoreGui
 
 local MainFrame = Instance.new("Frame", ScreenGui)
-MainFrame.Size = UDim2.new(0, 150, 0, 110)
-MainFrame.Position = UDim2.new(0.5, -75, 0.7, 0)
+MainFrame.Size = UDim2.new(0, 160, 0, 120)
+MainFrame.Position = UDim2.new(0.5, -80, 0.65, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 MainFrame.Active = true
 MainFrame.Draggable = true
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
 local UnwalkBtn = Instance.new("TextButton", MainFrame)
-UnwalkBtn.Size = UDim2.new(1, -10, 0, 45)
-UnwalkBtn.Position = UDim2.new(0, 5, 0, 5)
+UnwalkBtn.Size = UDim2.new(1, -20, 0, 45)
+UnwalkBtn.Position = UDim2.new(0, 10, 0, 10)
 UnwalkBtn.Text = "Unwalk: OFF"
 UnwalkBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 UnwalkBtn.TextColor3 = Color3.new(1, 1, 1)
-UnwalkBtn.Font = Enum.Font.SourceSansBold
-UnwalkBtn.TextSize = 16
+UnwalkBtn.Font = Enum.Font.GothamBold
+UnwalkBtn.TextSize = 15
 
 local ToggleBtn = Instance.new("TextButton", MainFrame)
-ToggleBtn.Size = UDim2.new(1, -10, 0, 45)
-ToggleBtn.Position = UDim2.new(0, 5, 0, 55)
+ToggleBtn.Size = UDim2.new(1, -20, 0, 45)
+ToggleBtn.Position = UDim2.new(0, 10, 0, 65)
 ToggleBtn.Text = "Desync: ON"
 ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
 ToggleBtn.TextColor3 = Color3.new(1, 1, 1)
-ToggleBtn.Font = Enum.Font.SourceSansBold
-ToggleBtn.TextSize = 16
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.TextSize = 15
 
---// 3. RakNet Hook (only if supported by executor)
+--// 3. Safe RakNet Hook (prevents the nil error)
 pcall(function()
-    if raknet and raknet.add_send_hook then
+    if raknet and typeof(raknet.add_send_hook) == "function" then
         raknet.add_send_hook(function(packet)
             if SETTINGS.DesyncEnabled and packet.PacketId == SETTINGS.PacketId then
                 local data = packet.AsBuffer
@@ -8107,6 +8108,9 @@ pcall(function()
                 packet:SetData(data)
             end
         end)
+        print("Raknet desync hook applied successfully")
+    else
+        print("Raknet not supported by this executor - Desync packet modification disabled")
     end
 end)
 
@@ -8137,6 +8141,7 @@ local function generateGhost(char)
     char.Archivable = true
     local ghost = char:Clone()
     char.Archivable = false
+    
     for _, obj in pairs(ghost:GetDescendants()) do
         if obj:IsA("BasePart") then
             obj.Color = SETTINGS.GhostColor
@@ -8144,16 +8149,14 @@ local function generateGhost(char)
             obj.CanCollide = false
             obj.Anchored = true
             obj.Material = Enum.Material.ForceField
-        elseif obj:IsA("Decal") or obj:IsA("Texture") then
-            obj:Destroy()
-        elseif obj:IsA("SpecialMesh") then
-            obj.TextureId = ""
-        elseif not obj:IsA("BasePart") and not obj:IsA("Model") then
+        elseif obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("SpecialMesh") then
             obj:Destroy()
         end
     end
+    
     distanceLabel = createDistanceUI(ghost)
     ghost.Parent = ghostFolder
+    
     if char:FindFirstChild("HumanoidRootPart") then
         lockedServerPos = char.HumanoidRootPart.CFrame
     end
@@ -8173,9 +8176,9 @@ UnwalkBtn.MouseButton1Click:Connect(function()
         if SETTINGS.UnwalkEnabled then
             if animateScript then animateScript.Disabled = true end
             if hum then
-                local animator = hum:FindFirstChildWhichIsA("Animator")
-                local tracks = animator and animator:GetPlayingAnimationTracks() or {}
-                for _, track in pairs(tracks) do track:Stop(0) end
+                for _, track in pairs(hum:GetPlayingAnimationTracks()) do
+                    track:Stop(0)
+                end
             end
         else
             if animateScript then
@@ -8194,10 +8197,8 @@ ToggleBtn.MouseButton1Click:Connect(function()
     if not SETTINGS.DesyncEnabled then
         ghostFolder:ClearAllChildren()
         serverGhost = nil
-    else
-        if LocalPlayer.Character then
-            serverGhost = generateGhost(LocalPlayer.Character)
-        end
+    elseif LocalPlayer.Character then
+        serverGhost = generateGhost(LocalPlayer.Character)
     end
 end)
 
@@ -8224,7 +8225,7 @@ RunService.PostSimulation:Connect(function()
     end
 end)
 
---// 7. Character Respawn Handling
+--// 7. Respawn Handling
 LocalPlayer.CharacterAdded:Connect(function(c)
     task.wait(1)
     if SETTINGS.DesyncEnabled then
@@ -8236,4 +8237,4 @@ LocalPlayer.CharacterAdded:Connect(function(c)
     end
 end)
 
-print("Desync + Unwalk script loaded successfully!")
+print("✅ Fixed Desync + Unwalk script loaded (raknet safely handled)")
